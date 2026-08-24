@@ -1,352 +1,385 @@
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark"><span></span><span></span><span></span></div>
-      <div>
-        <strong>TaskFlow Pro</strong>
-        <small>Productivité personnelle</small>
-      </div>
+<div class="app-shell" [class.dark-mode]="darkMode()">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="brand" type="button" (click)="setPage('tasks')">TODO LIST</button>
+      <nav class="main-nav" aria-label="Navigation principale">
+        <button type="button" [class.active]="currentPage() === 'dashboard'" (click)="setPage('dashboard')">Tableau de bord</button>
+        <button type="button" [class.active]="currentPage() === 'tasks'" (click)="setPage('tasks')">Mes tâches</button>
+        <button type="button" [class.active]="currentPage() === 'tools'" (click)="setPage('tools')">Outils</button>
+      </nav>
     </div>
+  </header>
 
-    <button class="btn btn-primary btn-wide create-btn" type="button" (click)="openCreate()">
-      <span class="plus">+</span> Nouvelle tâche
-    </button>
+  @if (currentPage() === 'dashboard') {
+    <main class="page secondary-page">
+      <section class="page-heading">
+        <p class="eyebrow">TABLEAU DE BORD</p>
+        <h1>Vue d’ensemble</h1>
+        <p class="intro">Un résumé rapide de l’avancement de ta liste.</p>
+      </section>
 
-    <nav class="nav" aria-label="Navigation principale">
-      <button [class.active]="view() === 'dashboard'" (click)="setView('dashboard')"><span class="nav-icon">DB</span><span>Tableau de bord</span></button>
-      <button [class.active]="view() === 'inbox'" (click)="setView('inbox')"><span class="nav-icon">IN</span><span>Boîte de réception</span><b>{{ store.activeCount() }}</b></button>
-      <button [class.active]="view() === 'today'" (click)="setView('today')"><span class="nav-icon">AJ</span><span>Aujourd’hui</span></button>
-      <button [class.active]="view() === 'upcoming'" (click)="setView('upcoming')"><span class="nav-icon">7J</span><span>7 prochains jours</span></button>
-    </nav>
-
-    <div class="sidebar-section">
-      <p>Bibliothèque</p>
-      <button [class.active]="view() === 'completed'" (click)="setView('completed')"><span class="nav-icon">OK</span><span>Terminées</span><b>{{ store.completedCount() }}</b></button>
-      <button [class.active]="view() === 'archived'" (click)="setView('archived')"><span class="nav-icon">AR</span><span>Archives</span><b>{{ store.archivedCount() }}</b></button>
-    </div>
-
-    @if (categories().length) {
-      <div class="sidebar-section categories-block">
-        <p>Catégories</p>
-        @for (item of categories().slice(0, 6); track item) {
-          <button class="category-link" (click)="category.set(item); setView('inbox')">
-            <span class="category-dot"></span><span>{{ item }}</span>
-          </button>
-        }
-      </div>
-    }
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="goal-card">
-      <div class="goal-head"><span>Objectif du jour</span><strong>{{ dashboard().completedToday }}/{{ dashboard().goal }}</strong></div>
-      <small>{{ dashboard().goalRate }}% accompli</small>
-    </div>
-
-    <div class="sidebar-footer">
-      <button (click)="store.toggleTheme()"><span class="nav-icon">TH</span><span>Thème {{ store.settings().theme === 'light' ? 'sombre' : 'clair' }}</span></button>
-      <button (click)="showSettings.set(true)"><span class="nav-icon">RE</span><span>Réglages</span></button>
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">TaskFlow Pro</p>
-        <h1>
-          @switch (view()) {
-            @case ('dashboard') { Tableau de bord }
-            @case ('inbox') { Boîte de réception }
-            @case ('today') { Aujourd’hui }
-            @case ('upcoming') { Prochains jours }
-            @case ('completed') { Tâches terminées }
-            @case ('archived') { Archives }
-          }
-        </h1>
-        <p class="subtitle">
-          @switch (view()) {
-            @case ('dashboard') { Une vue d’ensemble claire de ta charge de travail. }
-            @default { Organise, filtre et avance sans perdre le fil. }
-          }
-        </p>
-      </div>
-      <div class="top-actions">
-        <button class="btn btn-primary mobile-create" (click)="openCreate()">Ajouter</button>
-      </div>
-    </header>
-
-    <section class="global-search-shell" aria-label="Recherche globale">
-      <div class="simple-search global-search-bar">
-        <span class="search-icon" aria-hidden="true"></span>
-        <input
-          type="search"
-          class="global-search"
-          placeholder="Rechercher une tâche..."
-          aria-label="Rechercher dans toutes les tâches"
-          [ngModel]="query()"
-          (ngModelChange)="updateGlobalSearch($event)">
-        @if (query()) {
-          <button type="button" class="clear-search" aria-label="Effacer la recherche" title="Effacer" (click)="clearGlobalSearch()">×</button>
-        }
-      </div>
-    </section>
-
-    @if (view() === 'dashboard') {
-      <section class="stats-grid">
-        <article class="stat-card accent-primary">
-          <div class="stat-top"><span>À faire</span><span class="stat-code">ACT</span></div>
-          <strong>{{ dashboard().active }}</strong>
-          <small>{{ dashboard().dueToday }} prévue(s) aujourd’hui</small>
+      <section class="stats-grid" aria-label="Statistiques">
+        <article class="stat-card">
+          <span>Total</span>
+          <strong>{{ total() }}</strong>
+          <small>tâche(s)</small>
         </article>
-        <article class="stat-card accent-success">
-          <div class="stat-top"><span>Terminées</span><span class="stat-code">OK</span></div>
-          <strong>{{ dashboard().completed }}</strong>
-          <small>{{ dashboard().rate }}% de progression globale</small>
+        <article class="stat-card">
+          <span>Terminées</span>
+          <strong>{{ completed() }}</strong>
+          <small>{{ progress() }} % du total</small>
         </article>
-        <article class="stat-card accent-danger">
-          <div class="stat-top"><span>En retard</span><span class="stat-code">RET</span></div>
-          <strong>{{ dashboard().overdue }}</strong>
-          <small>{{ dashboard().overdue ? 'À traiter en priorité' : 'Rien à signaler' }}</small>
+        <article class="stat-card">
+          <span>À faire</span>
+          <strong>{{ remaining() }}</strong>
+          <small>tâche(s) restante(s)</small>
         </article>
-        <article class="stat-card accent-violet">
-          <div class="stat-top"><span>Aujourd’hui</span><span class="stat-code">JOUR</span></div>
-          <strong>{{ dashboard().dueToday }}</strong>
-          <small>tâche(s) avec une échéance aujourd’hui</small>
+        <article class="stat-card">
+          <span>Sous-tâches</span>
+          <strong>{{ subtaskCompleted() }} / {{ subtaskTotal() }}</strong>
+          <small>terminée(s)</small>
         </article>
       </section>
 
       <section class="dashboard-grid">
-        <article class="panel productivity-panel">
-          <div class="panel-head">
-            <div><p class="panel-kicker">Aujourd’hui</p><h2>Objectif quotidien</h2></div>
-            <div class="score-circle"><span>{{ dashboard().goalRate }}</span><small>%</small></div>
-          </div>
-          <div class="goal-summary">
-            <strong>{{ dashboard().completedToday }} / {{ dashboard().goal }}</strong>
-            <span>tâches terminées aujourd’hui</span>
-          </div>
-          <div class="goal-actions">
-            <button class="btn btn-primary" (click)="openCreate()">Ajouter une tâche</button>
-            <button class="btn btn-ghost" (click)="setView('today')">Voir aujourd’hui</button>
-          </div>
-        </article>
-
-        <article class="panel priority-panel">
-          <div class="panel-head compact"><div><p class="panel-kicker">Répartition</p><h2>Priorités actives</h2></div></div>
-          <div class="priority-chart">
-            @for (item of priorityBreakdown(); track item.priority) {
-              <div class="priority-line">
-                <div><span class="priority-dot" [attr.data-priority]="item.priority"></span><span>{{ priorityLabel(item.priority) }}</span><strong>{{ item.count }}</strong></div>
-                <div class="bar"><span [attr.data-priority]="item.priority" [style.width.%]="item.percent"></span></div>
-              </div>
-            }
-          </div>
-        </article>
-
-        <article class="panel upcoming-panel">
-          <div class="panel-head compact">
-            <div><p class="panel-kicker">Planning</p><h2>Prochaines échéances</h2></div>
-            <button class="text-btn" (click)="setView('upcoming')">Tout voir</button>
-          </div>
-          @if (upcomingPreview().length) {
-            <div class="mini-task-list">
-              @for (task of upcomingPreview(); track task.id) {
-                <button class="mini-task" (click)="openEdit(task)">
-                  <span class="mini-priority" [attr.data-priority]="task.priority"></span>
-                  <span class="mini-task-content"><strong>{{ task.title }}</strong><small>{{ dateLabel(task) }}</small></span>
-                  <span class="mini-status" [attr.data-status]="task.status">{{ statusLabel(task.status) }}</span>
-                </button>
-              }
+        <article class="dashboard-card progress-large">
+          <div class="card-head">
+            <div>
+              <p class="label">Progression générale</p>
+              <strong>{{ progress() }} %</strong>
             </div>
-          } @else {
-            <div class="panel-empty"><strong>Aucune échéance planifiée</strong><span>Ajoute une date à une tâche pour la voir ici.</span></div>
-          }
+            <span>{{ completed() }} / {{ total() }} terminée(s)</span>
+          </div>
+          <div class="progress-track" role="progressbar" [attr.aria-valuenow]="progress()" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" [style.width.%]="progress()"></div>
+          </div>
         </article>
 
-        <article class="panel activity-panel">
-          <div class="panel-head compact"><div><p class="panel-kicker">Historique</p><h2>Activité récente</h2></div></div>
-          @if (store.activity().length) {
-            <div class="activity-list">
-              @for (item of store.activity().slice(0, 6); track item.id) {
-                <div class="activity-item">
-                  <span class="activity-mark" [attr.data-type]="item.type"></span>
-                  <div><strong>{{ item.taskTitle }}</strong><small>{{ item.type === 'focus' ? 'Focus ' + item.detail : item.type === 'created' ? 'Tâche créée' : item.type === 'completed' ? 'Tâche terminée' : item.type === 'reopened' ? 'Tâche rouverte' : 'Tâche supprimée' }}</small></div>
-                </div>
-              }
-            </div>
-          } @else {
-            <div class="panel-empty"><strong>Pas encore d’activité</strong><span>Ton historique apparaîtra au fur et à mesure.</span></div>
-          }
+        <article class="dashboard-card chart-card">
+          <div class="pie" [style.background]="pieStyle()" aria-hidden="true">
+            <div class="pie-center"><strong>{{ progress() }}%</strong><span>terminé</span></div>
+          </div>
+          <div class="legend">
+            <p><span class="dot done"></span>Terminées <strong>{{ completed() }}</strong></p>
+            <p><span class="dot todo"></span>À faire <strong>{{ remaining() }}</strong></p>
+          </div>
         </article>
       </section>
-    }
 
-    @if (view() !== 'dashboard') {
-      @if (selected().size) {
-        <section class="bulkbar">
-          <strong>{{ selected().size }} tâche(s) sélectionnée(s)</strong>
-          <div><button class="btn btn-ghost" (click)="bulkComplete()">Terminer</button><button class="btn btn-danger" (click)="bulkDelete()">Supprimer</button></div>
-        </section>
-      }
-
-      @if (visibleTasks().length) {
-        <div class="list-head">
-          <label><input type="checkbox" (change)="selectAllVisible()"> Tout sélectionner</label>
-          <span>{{ visibleTasks().length }} résultat(s)</span>
+      <section class="history-card">
+        <div class="section-head-row">
+          <div>
+            <p class="label">Historique</p>
+            <h2>Activité récente</h2>
+          </div>
+          @if (store.history().length) {
+            <button class="text-btn danger" type="button" (click)="clearHistory()">Effacer l’historique</button>
+          }
         </div>
 
-        <section class="task-list">
-          @for (task of visibleTasks(); track task.id) {
-            <article class="task-card" [class.done]="task.completed" [class.overdue]="isOverdue(task)" [class.pinned]="task.pinned">
-              <div class="task-row">
-                <input class="select-check" type="checkbox" [checked]="selected().has(task.id)" (change)="toggleSelected(task.id)" aria-label="Sélectionner la tâche">
-                <button class="complete-check" [class.checked]="task.completed" (click)="store.toggleComplete(task.id)" [attr.aria-label]="task.completed ? 'Rouvrir la tâche' : 'Terminer la tâche'"><span></span></button>
-
-                <div class="task-content">
-                  <div class="task-heading">
-                    <div class="title-line">
-                      <h2>{{ task.title }}</h2>
-                      @if (task.favorite) { <span class="flag favorite">Favori</span> }
-                      @if (task.pinned) { <span class="flag">Épinglée</span> }
-                    </div>
-                    <div class="badges">
-                      <span class="status-badge" [attr.data-status]="task.status">{{ statusLabel(task.status) }}</span>
-                      <span class="priority-badge" [attr.data-priority]="task.priority">{{ priorityLabel(task.priority) }}</span>
-                    </div>
-                  </div>
-
-                  @if (task.description) { <p class="description">{{ task.description }}</p> }
-
-                  <div class="meta-row">
-                    <span [class.danger-text]="isOverdue(task)">{{ isOverdue(task) ? 'En retard · ' : '' }}{{ dateLabel(task) }}</span>
-                    @if (task.category) { <span>{{ task.category }}</span> }
-                    @if (task.estimatedMinutes) { <span>Prévu {{ durationLabel(task.estimatedMinutes) }}</span> }
-                  </div>
-
-                  @if (task.subtasks.length) {
-                    <div class="subtasks">
-                      @for (subtask of task.subtasks; track subtask.id) {
-                        <label [class.completed]="subtask.completed"><input type="checkbox" [checked]="subtask.completed" (change)="store.toggleSubtask(task.id, subtask.id)"><span>{{ subtask.title }}</span></label>
-                      }
-                    </div>
-                    <div class="progress-row"><div class="progress-bar"><span [style.width.%]="progress(task)"></span></div><small>{{ progress(task) }}%</small></div>
-                  }
+        @if (recentHistory().length) {
+          <div class="history-list">
+            @for (entry of recentHistory(); track entry.id) {
+              <div class="history-item">
+                <div class="history-dot"></div>
+                <div>
+                  <strong>{{ historyLabel(entry) }}</strong>
+                  <p>{{ entry.taskTitle }}</p>
                 </div>
-
-                <div class="task-actions">
-                  <button class="action-dot" (click)="openEdit(task)" title="Modifier">Modifier</button>
-                  <details class="more-menu">
-                    <summary class="action-dot">Plus</summary>
-                    <div class="menu-popover">
-                      <button (click)="store.update(task.id, { favorite: !task.favorite })">{{ task.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris' }}</button>
-                      <button (click)="store.update(task.id, { pinned: !task.pinned })">{{ task.pinned ? 'Désépingler' : 'Épingler' }}</button>
-                      <button (click)="store.duplicate(task.id)">Dupliquer</button>
-                      <button (click)="toggleArchive(task)">{{ task.archived ? 'Restaurer' : 'Archiver' }}</button>
-                      <button class="danger-text" (click)="deleteTask(task)">Supprimer</button>
-                    </div>
-                  </details>
-                </div>
+                <time>{{ formatHistoryDate(entry.date) }}</time>
               </div>
-            </article>
-          }
-        </section>
-      } @else {
-        <section class="empty-state panel">
-          <div class="empty-graphic"><span></span><span></span><span></span></div>
-          @if (store.tasks().length === 0) {
-            <h2>Ton espace est prêt</h2>
-            <p>Crée ta première tâche. Tout sera automatiquement enregistré dans le localStorage de ton navigateur.</p>
-            <button class="btn btn-primary" (click)="openCreate()">Créer une tâche</button>
-          } @else {
-            <h2>Aucun résultat</h2>
-            <p>Aucune tâche ne correspond actuellement à cette vue ou à ces filtres.</p>
-            <button class="btn btn-ghost" (click)="resetFilters()">Réinitialiser les filtres</button>
-          }
-        </section>
-      }
-    }
-
-    <footer class="data-footer">
-      <div><strong>Stockage local actif</strong><span>Toutes tes tâches sont enregistrées automatiquement dans ce navigateur.</span></div>
-    </footer>
-  </main>
-</div>
-
-@if (showForm()) {
-  <div class="modal-backdrop" (click)="showForm.set(false)">
-    <section class="modal task-modal" role="dialog" aria-modal="true" aria-labelledby="task-form-title" (click)="$event.stopPropagation()">
-      <header class="modal-head">
-        <div><p class="eyebrow">{{ editingId() ? 'Modification' : 'Nouvelle tâche' }}</p><h2 id="task-form-title">{{ editingId() ? 'Modifier la tâche' : 'Créer une tâche' }}</h2></div>
-        <button class="close-btn" (click)="showForm.set(false)" aria-label="Fermer">×</button>
-      </header>
-
-      <div class="task-form-content">
-        <section class="form-block form-block-essential">
-          <div class="form-block-heading">
-            <span class="form-step">01</span>
-            <div><h3>Informations essentielles</h3><p>Commence par ce qui permet d’identifier immédiatement la tâche.</p></div>
-          </div>
-          <div class="form-section primary-fields">
-            <label class="wide title-field"><span>Titre de la tâche <b>Obligatoire</b></span><input class="hero-input" [(ngModel)]="draft.title" placeholder="Ex. Préparer la présentation" autofocus></label>
-            <label class="wide description-field"><span>Description</span><textarea [(ngModel)]="draft.description" rows="3" placeholder="Décris brièvement ce qui doit être fait..."></textarea></label>
-          </div>
-        </section>
-
-        <section class="form-block">
-          <div class="form-block-heading">
-            <span class="form-step">02</span>
-            <div><h3>Organisation</h3><p>Définis la priorité, la catégorie et l’échéance.</p></div>
-          </div>
-          <div class="form-grid">
-            <label><span>Priorité</span><select [(ngModel)]="draft.priority"><option value="low">Basse</option><option value="medium">Moyenne</option><option value="high">Haute</option><option value="urgent">Urgente</option></select></label>
-            <label><span>Catégorie</span><input [(ngModel)]="draft.category" placeholder="Travail, Perso, Études..."></label>
-            <label><span>Date d’échéance</span><input type="date" [(ngModel)]="draft.dueDate"></label>
-            <label><span>Durée estimée (min)</span><input type="number" min="0" step="5" [(ngModel)]="draft.estimatedMinutes"></label>
-            <label class="wide"><span>Récurrence</span><select [(ngModel)]="draft.recurrence"><option value="none">Aucune</option><option value="daily">Chaque jour</option><option value="weekly">Chaque semaine</option><option value="monthly">Chaque mois</option></select></label>
-          </div>
-        </section>
-
-        <section class="form-block">
-          <div class="form-block-heading">
-            <span class="form-step">03</span>
-            <div><h3>Sous-tâches</h3><p>Découpe la tâche en étapes concrètes et suis sa progression.</p></div>
-          </div>
-          <div class="subtask-editor">
-            <div class="section-head"><div><strong>Étapes</strong><span>{{ draft.subtasks.length }} élément(s)</span></div></div>
-            <div class="subtask-add"><input [(ngModel)]="newSubtask" (keyup.enter)="addSubtask()" placeholder="Ajouter une étape..."><button class="btn btn-ghost" (click)="addSubtask()">Ajouter</button></div>
-            @for (subtask of draft.subtasks; track subtask.id) {
-              <div class="draft-subtask"><span>{{ subtask.title }}</span><button (click)="removeDraftSubtask(subtask.id)">Supprimer</button></div>
             }
           </div>
-        </section>
+        } @else {
+          <div class="mini-empty">L’activité de tes tâches apparaîtra ici.</div>
+        }
+      </section>
+    </main>
+  }
 
-        <section class="form-block">
-          <div class="form-block-heading">
-            <span class="form-step">04</span>
-            <div><h3>Informations complémentaires</h3><p>Ajoute uniquement les détails utiles à l’exécution.</p></div>
+  @if (currentPage() === 'tasks') {
+    <main class="page">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">TODO LIST</p>
+          <h1>Mes tâches</h1>
+          <p class="intro">Une liste simple pour ajouter, suivre, modifier et terminer tes tâches.</p>
+        </div>
+        <button class="btn primary" type="button" (click)="openCreate()">Ajouter une tâche</button>
+      </section>
+
+      <section class="overview" aria-label="Progression">
+        <div class="progress-card">
+          <div class="card-head">
+            <div>
+              <p class="label">Progression</p>
+              <strong>{{ progress() }} %</strong>
+            </div>
+            <span>{{ completed() }} / {{ total() }} terminée(s)</span>
           </div>
-          <div class="form-section">
-            <label class="wide"><span>Notes</span><textarea [(ngModel)]="draft.notes" rows="4" placeholder="Informations complémentaires, liens, décisions..."></textarea></label>
+          <div class="progress-track" aria-label="Progression des tâches" role="progressbar" [attr.aria-valuenow]="progress()" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" [style.width.%]="progress()"></div>
           </div>
-        </section>
-      </div>
+        </div>
 
-      <footer class="modal-footer"><button class="btn btn-ghost" (click)="showForm.set(false)">Annuler</button><button class="btn btn-primary" (click)="saveTask()">{{ editingId() ? 'Enregistrer' : 'Créer la tâche' }}</button></footer>
-    </section>
-  </div>
-}
+        <div class="pie-card">
+          <div class="pie" [style.background]="pieStyle()" aria-hidden="true">
+            <div class="pie-center"><strong>{{ progress() }}%</strong><span>terminé</span></div>
+          </div>
+          <div class="legend">
+            <p><span class="dot done"></span>Terminées <strong>{{ completed() }}</strong></p>
+            <p><span class="dot todo"></span>À faire <strong>{{ remaining() }}</strong></p>
+          </div>
+        </div>
+      </section>
 
-@if (showSettings()) {
-  <div class="modal-backdrop" (click)="showSettings.set(false)">
-    <section class="modal settings-modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-      <header class="modal-head"><div><p class="eyebrow">Préférences</p><h2>Réglages</h2></div><button class="close-btn" (click)="showSettings.set(false)">×</button></header>
-      <div class="settings-list">
-        <div class="setting-row"><div><strong>Thème</strong><span>Basculer entre clair et sombre.</span></div><button class="btn btn-ghost" (click)="store.toggleTheme()">{{ store.settings().theme === 'light' ? 'Activer sombre' : 'Activer clair' }}</button></div>
-        <div class="setting-row"><div><strong>Objectif quotidien</strong><span>Nombre de tâches à terminer par jour.</span></div><input class="goal-input" type="number" min="1" max="20" [ngModel]="store.settings().dailyGoal" (ngModelChange)="store.setDailyGoal($event)"></div>
-        @if (store.completedCount()) { <div class="setting-row danger-setting"><div><strong>Nettoyage</strong><span>Supprimer définitivement les tâches terminées.</span></div><button class="btn btn-danger" (click)="clearCompleted()">Vider</button></div> }
-      </div>
-    </section>
-  </div>
-}
+      <section class="list-section">
+        <div class="list-toolbar">
+          <div>
+            <p class="label">Liste</p>
+            <h2>{{ total() }} tâche(s)</h2>
+          </div>
+          <div class="export-actions">
+            <button class="btn secondary" type="button" (click)="printTodo()">Imprimer</button>
+            <button class="btn secondary" type="button" (click)="exportTodoPdf()">PDF</button>
+            <button class="btn secondary" type="button" (click)="exportTodoWord()">Word</button>
+          </div>
+        </div>
 
-@if (toast()) { <div class="toast">{{ toast() }}</div> }
+        @if (store.tasks().length) {
+          <div class="kanban-board">
+            <section class="kanban-column"
+              [class.drag-over]="dragOverStatus() === 'todo'"
+              (dragover)="dragOver($event, 'todo')"
+              (dragleave)="dragLeave($event, 'todo')"
+              (drop)="dropTask($event, 'todo')">
+              <div class="kanban-head">
+                <div><span class="status-dot todo-status"></span><h3>À faire</h3></div>
+                <strong>{{ todoTasks().length }}</strong>
+              </div>
+
+              <div class="kanban-list">
+                @for (task of todoTasks(); track task.id) {
+                  <article class="task-card kanban-task" draggable="true"
+                    [class.dragging]="draggingTaskId() === task.id"
+                    (dragstart)="dragStart($event, task)"
+                    (dragend)="dragEnd()">
+                    <div class="drag-handle" title="Glisser pour déplacer" aria-hidden="true">⋮⋮</div>
+                    <div class="task-content">
+                      <div class="task-title-row">
+                        <h3>{{ task.title }}</h3>
+                        <div class="task-actions">
+                          <button type="button" class="text-btn" (click)="openEdit(task)">Modifier</button>
+                          <button type="button" class="text-btn danger" (click)="deleteTask(task)">Supprimer</button>
+                        </div>
+                      </div>
+                      @if (task.subtasks.length) {
+                        <ul class="subtask-list">
+                          @for (subtask of task.subtasks; track subtask.id) {
+                            <li><label><input type="checkbox" [checked]="subtask.completed" (change)="store.toggleSubtask(task.id, subtask.id)"><span [class.done-text]="subtask.completed">{{ subtask.title }}</span></label></li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </article>
+                } @empty {
+                  <div class="column-empty">Dépose une tâche ici</div>
+                }
+              </div>
+            </section>
+
+            <section class="kanban-column"
+              [class.drag-over]="dragOverStatus() === 'doing'"
+              (dragover)="dragOver($event, 'doing')"
+              (dragleave)="dragLeave($event, 'doing')"
+              (drop)="dropTask($event, 'doing')">
+              <div class="kanban-head">
+                <div><span class="status-dot doing-status"></span><h3>En cours</h3></div>
+                <strong>{{ doingTasks().length }}</strong>
+              </div>
+
+              <div class="kanban-list">
+                @for (task of doingTasks(); track task.id) {
+                  <article class="task-card kanban-task" draggable="true"
+                    [class.dragging]="draggingTaskId() === task.id"
+                    (dragstart)="dragStart($event, task)"
+                    (dragend)="dragEnd()">
+                    <div class="drag-handle" title="Glisser pour déplacer" aria-hidden="true">⋮⋮</div>
+                    <div class="task-content">
+                      <div class="task-title-row">
+                        <h3>{{ task.title }}</h3>
+                        <div class="task-actions">
+                          <button type="button" class="text-btn" (click)="openEdit(task)">Modifier</button>
+                          <button type="button" class="text-btn danger" (click)="deleteTask(task)">Supprimer</button>
+                        </div>
+                      </div>
+                      @if (task.subtasks.length) {
+                        <ul class="subtask-list">
+                          @for (subtask of task.subtasks; track subtask.id) {
+                            <li><label><input type="checkbox" [checked]="subtask.completed" (change)="store.toggleSubtask(task.id, subtask.id)"><span [class.done-text]="subtask.completed">{{ subtask.title }}</span></label></li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </article>
+                } @empty {
+                  <div class="column-empty">Dépose une tâche ici</div>
+                }
+              </div>
+            </section>
+
+            <section class="kanban-column"
+              [class.drag-over]="dragOverStatus() === 'done'"
+              (dragover)="dragOver($event, 'done')"
+              (dragleave)="dragLeave($event, 'done')"
+              (drop)="dropTask($event, 'done')">
+              <div class="kanban-head">
+                <div><span class="status-dot done-status"></span><h3>Fini</h3></div>
+                <strong>{{ doneTasks().length }}</strong>
+              </div>
+
+              <div class="kanban-list">
+                @for (task of doneTasks(); track task.id) {
+                  <article class="task-card kanban-task completed" draggable="true"
+                    [class.dragging]="draggingTaskId() === task.id"
+                    (dragstart)="dragStart($event, task)"
+                    (dragend)="dragEnd()">
+                    <div class="drag-handle" title="Glisser pour déplacer" aria-hidden="true">⋮⋮</div>
+                    <div class="task-content">
+                      <div class="task-title-row">
+                        <h3>{{ task.title }}</h3>
+                        <div class="task-actions">
+                          <button type="button" class="text-btn" (click)="openEdit(task)">Modifier</button>
+                          <button type="button" class="text-btn danger" (click)="deleteTask(task)">Supprimer</button>
+                        </div>
+                      </div>
+                      @if (task.subtasks.length) {
+                        <ul class="subtask-list">
+                          @for (subtask of task.subtasks; track subtask.id) {
+                            <li><label><input type="checkbox" [checked]="subtask.completed" (change)="store.toggleSubtask(task.id, subtask.id)"><span [class.done-text]="subtask.completed">{{ subtask.title }}</span></label></li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  </article>
+                } @empty {
+                  <div class="column-empty">Dépose une tâche ici</div>
+                }
+              </div>
+            </section>
+          </div>
+        } @else {
+          <div class="empty-state">
+            <h3>Aucune tâche</h3>
+            <p>Ajoute ta première tâche pour commencer.</p>
+            <button class="btn primary" type="button" (click)="openCreate()">Ajouter une tâche</button>
+          </div>
+        }
+      </section>
+    </main>
+  }
+
+  @if (currentPage() === 'tools') {
+    <main class="page secondary-page">
+      <section class="page-heading">
+        <p class="eyebrow">OUTILS</p>
+        <h1>Réglages et sauvegarde</h1>
+        <p class="intro">Des fonctions supplémentaires séparées de ta liste de tâches.</p>
+      </section>
+
+      <section class="tools-grid">
+        <article class="tool-card">
+          <div>
+            <p class="label">Sauvegarde</p>
+            <h2>Exporter mes données</h2>
+            <p>Télécharge une sauvegarde complète de tes tâches et sous-tâches au format JSON.</p>
+          </div>
+          <button class="btn primary" type="button" (click)="exportBackup()">Télécharger la sauvegarde</button>
+        </article>
+
+        <article class="tool-card">
+          <div>
+            <p class="label">Restauration</p>
+            <h2>Importer une sauvegarde</h2>
+            <p>Restaure une sauvegarde précédemment téléchargée. Les tâches actuelles seront remplacées.</p>
+          </div>
+          <label class="btn secondary file-button">
+            Choisir un fichier
+            <input type="file" accept="application/json,.json" (change)="importBackup($event)">
+          </label>
+        </article>
+
+        <article class="tool-card">
+          <div>
+            <p class="label">Apparence</p>
+            <h2>Mode sombre</h2>
+            <p>Change l’apparence de l’application sans modifier tes tâches.</p>
+          </div>
+          <button class="btn secondary" type="button" (click)="toggleDarkMode()">
+            {{ darkMode() ? 'Passer en mode clair' : 'Passer en mode sombre' }}
+          </button>
+        </article>
+
+        <article class="tool-card danger-zone">
+          <div>
+            <p class="label">Nettoyage</p>
+            <h2>Supprimer les tâches terminées</h2>
+            <p>Retire en une seule fois toutes les tâches actuellement marquées comme terminées.</p>
+          </div>
+          <button class="btn danger-btn" type="button" (click)="clearCompletedTasks()" [disabled]="completed() === 0">
+            Supprimer {{ completed() }} tâche(s) terminée(s)
+          </button>
+        </article>
+      </section>
+    </main>
+  }
+
+  @if (showForm()) {
+    <div class="modal-backdrop" (click)="closeForm()">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="task-form-title" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <p class="label">{{ editingId() ? 'Modification' : 'Nouvelle tâche' }}</p>
+            <h2 id="task-form-title">{{ editingId() ? 'Modifier la tâche' : 'Ajouter une tâche' }}</h2>
+          </div>
+          <button class="close-btn" type="button" aria-label="Fermer" (click)="closeForm()">×</button>
+        </div>
+
+        <form (ngSubmit)="saveTask()">
+          <label class="field">
+            <span>Titre</span>
+            <input name="title" [(ngModel)]="title" autocomplete="off" placeholder="Ex. Envoyer le dossier" autofocus>
+          </label>
+
+          <div class="subtasks-editor">
+            <div class="section-title"><span>Sous-tâches</span></div>
+            <div class="subtask-add">
+              <input name="newSubtask" [(ngModel)]="newSubtask" autocomplete="off" placeholder="Ajouter une sous-tâche" (keyup.enter)="$event.preventDefault(); addSubtask()">
+              <button class="btn secondary" type="button" (click)="addSubtask()">Ajouter</button>
+            </div>
+
+            @if (subtasks.length) {
+              <ul class="draft-subtasks">
+                @for (subtask of subtasks; track subtask.id) {
+                  <li>
+                    <span>{{ subtask.title }}</span>
+                    <button type="button" (click)="removeDraftSubtask(subtask.id)">Supprimer</button>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn secondary" type="button" (click)="closeForm()">Annuler</button>
+            <button class="btn primary" type="submit">{{ editingId() ? 'Enregistrer' : 'Ajouter' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+
+  @if (toast()) {
+    <div class="toast" role="status">{{ toast() }}</div>
+  }
+</div>

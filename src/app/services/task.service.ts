@@ -1,210 +1,230 @@
-import { Injectable, computed, effect, signal } from '@angular/core';
-import { ActivityEntry, AppSettings, Recurrence, Task, TaskStatus } from '../models/task.model';
+import { Injectable, effect, signal } from '@angular/core';
+import { Subtask, Task, TaskStatus } from '../models/task.model';
 
-const TASKS_KEY = 'taskflow.tasks.v2';
-const LEGACY_TASKS_KEY = 'taskflow.tasks.v1';
-const SETTINGS_KEY = 'taskflow.settings.v2';
-const LEGACY_SETTINGS_KEY = 'taskflow.settings.v1';
-const ACTIVITY_KEY = 'taskflow.activity.v2';
+export interface HistoryEntry {
+  id: string;
+  action: 'created' | 'updated' | 'completed' | 'reopened' | 'deleted' | 'imported' | 'cleared';
+  taskTitle: string;
+  date: string;
+}
+
+const STORAGE_KEY = 'taskflow.tasks.simple';
+const HISTORY_KEY = 'taskflow.history.simple';
+const OLD_KEYS = ['taskflow.tasks.v2', 'taskflow.tasks.v1'];
 
 @Injectable({ providedIn: 'root' })
 export class TaskService {
   readonly tasks = signal<Task[]>(this.readTasks());
-  readonly settings = signal<AppSettings>(this.readSettings());
-  readonly activity = signal<ActivityEntry[]>(this.readActivity());
-
-  readonly activeCount = computed(() => this.tasks().filter(t => !t.completed && !t.archived).length);
-  readonly completedCount = computed(() => this.tasks().filter(t => t.completed && !t.archived).length);
-  readonly archivedCount = computed(() => this.tasks().filter(t => t.archived).length);
+  readonly history = signal<HistoryEntry[]>(this.readHistory());
 
   constructor() {
-    effect(() => localStorage.setItem(TASKS_KEY, JSON.stringify(this.tasks())));
-    effect(() => localStorage.setItem(ACTIVITY_KEY, JSON.stringify(this.activity().slice(0, 80))));
-    effect(() => {
-      const settings = this.settings();
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      document.documentElement.dataset['theme'] = settings.theme;
-      document.documentElement.dataset['compact'] = 'false';
-    });
+    effect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks())));
+    effect(() => localStorage.setItem(HISTORY_KEY, JSON.stringify(this.history())));
   }
 
-  create(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedAt'>): string {
+  create(title: string, subtasks: Subtask[]): void {
     const now = new Date().toISOString();
-    const id = crypto.randomUUID();
-    const newTask: Task = { ...task, id, createdAt: now, updatedAt: now, completedAt: task.completed ? now : null };
-    this.tasks.update(tasks => [newTask, ...tasks]);
-    this.log('created', newTask.title);
-    return id;
+    this.tasks.update(tasks => [{
+      id: crypto.randomUUID(),
+      title,
+      completed: false,
+      status: 'todo',
+      subtasks,
+      createdAt: now,
+      updatedAt: now
+    }, ...tasks]);
+    this.record('created', title);
   }
 
-  update(id: string, patch: Partial<Task>): void {
-    this.tasks.update(tasks => tasks.map(t => t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t));
-  }
-
-  setStatus(id: string, status: TaskStatus): void {
-    const task = this.tasks().find(t => t.id === id);
+  update(id: string, title: string, subtasks: Subtask[]): void {
+    const task = this.tasks().find(item => item.id === id);
     if (!task) return;
-    const completed = status === 'done';
-    const wasCompleted = task.completed;
-    this.update(id, { status, completed, completedAt: completed ? new Date().toISOString() : null });
-    if (!wasCompleted && completed) {
-      this.log('completed', task.title);
-      if (task.recurrence !== 'none' && task.dueDate) this.createRecurringCopy(task);
-    } else if (wasCompleted && !completed) {
-      this.log('reopened', task.title);
-    }
+
+    const allSubtasksDone = subtasks.length > 0 && subtasks.every(subtask => subtask.completed);
+    const status: TaskStatus = allSubtasksDone
+      ? 'done'
+      : (subtasks.length > 0 && task.status === 'done' ? 'doing' : task.status);
+
+    this.tasks.update(tasks => tasks.map(item => item.id === id ? {
+      ...item,
+      title,
+      subtasks,
+      status,
+      completed: status === 'done',
+      updatedAt: new Date().toISOString()
+    } : item));
+    this.record('updated', title);
   }
 
-  toggleComplete(id: string): void {
-    const task = this.tasks().find(t => t.id === id);
+  toggleTask(id: string): void {
+    const task = this.tasks().find(item => item.id === id);
     if (!task) return;
-    this.setStatus(id, task.completed ? 'todo' : 'done');
+    const status: TaskStatus = task.status === 'done' ? 'todo' : 'done';
+    this.tasks.update(tasks => tasks.map(item => item.id === id ? {
+      ...item,
+      status,
+      completed: status === 'done',
+      subtasks: status === 'done'
+        ? item.subtasks.map(subtask => ({ ...subtask, completed: true }))
+        : item.subtasks,
+      updatedAt: new Date().toISOString()
+    } : item));
+    this.record(status === 'done' ? 'completed' : 'reopened', task.title);
   }
 
   toggleSubtask(taskId: string, subtaskId: string): void {
-    const task = this.tasks().find(t => t.id === taskId);
+    const task = this.tasks().find(item => item.id === taskId);
     if (!task) return;
-    const subtasks = task.subtasks.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s);
-    this.update(taskId, { subtasks });
+
+    let becameDone = false;
+    let reopened = false;
+
+    this.tasks.update(tasks => tasks.map(item => {
+      if (item.id !== taskId) return item;
+
+      const subtasks = item.subtasks.map(subtask => subtask.id === subtaskId
+        ? { ...subtask, completed: !subtask.completed }
+        : subtask);
+
+      const allDone = subtasks.length > 0 && subtasks.every(subtask => subtask.completed);
+      let status = item.status;
+
+      if (allDone) {
+        becameDone = item.status !== 'done';
+        status = 'done';
+      } else if (item.status === 'done') {
+        reopened = true;
+        status = 'doing';
+      } else if (subtasks.some(subtask => subtask.completed) && item.status === 'todo') {
+        status = 'doing';
+      }
+
+      return {
+        ...item,
+        subtasks,
+        status,
+        completed: status === 'done',
+        updatedAt: new Date().toISOString()
+      };
+    }));
+
+    if (becameDone) this.record('completed', task.title);
+    else if (reopened) this.record('reopened', task.title);
+  }
+
+  moveTask(id: string, targetStatus: TaskStatus): boolean {
+    const task = this.tasks().find(item => item.id === id);
+    if (!task || task.status === targetStatus) return true;
+
+    const allSubtasksDone = task.subtasks.length > 0 && task.subtasks.every(subtask => subtask.completed);
+    if (targetStatus !== 'done' && allSubtasksDone) return false;
+
+    this.tasks.update(tasks => tasks.map(item => item.id === id ? {
+      ...item,
+      status: targetStatus,
+      completed: targetStatus === 'done',
+      subtasks: targetStatus === 'done'
+        ? item.subtasks.map(subtask => ({ ...subtask, completed: true }))
+        : item.subtasks,
+      updatedAt: new Date().toISOString()
+    } : item));
+
+    if (targetStatus === 'done') this.record('completed', task.title);
+    else if (task.status === 'done') this.record('reopened', task.title);
+    else this.record('updated', task.title);
+    return true;
   }
 
   remove(id: string): void {
-    const task = this.tasks().find(t => t.id === id);
-    if (task) this.log('deleted', task.title);
-    this.tasks.update(tasks => tasks.filter(t => t.id !== id));
-  }
-
-  duplicate(id: string): void {
-    const task = this.tasks().find(t => t.id === id);
+    const task = this.tasks().find(item => item.id === id);
     if (!task) return;
-    this.create({
-      ...task,
-      title: `${task.title} - copie`,
-      status: 'todo',
-      completed: false,
-      archived: false,
-      pinned: false,
-      favorite: false,
-      subtasks: task.subtasks.map(s => ({ ...s, id: crypto.randomUUID(), completed: false }))
-    });
+    this.tasks.update(tasks => tasks.filter(item => item.id !== id));
+    this.record('deleted', task.title);
   }
 
-
-  bulkComplete(ids: string[]): void {
-    ids.forEach(id => this.setStatus(id, 'done'));
+  clearCompleted(): number {
+    const completed = this.tasks().filter(task => task.status === 'done');
+    if (!completed.length) return 0;
+    this.tasks.update(tasks => tasks.filter(task => task.status !== 'done'));
+    this.record('cleared', `${completed.length} tâche(s) terminée(s)`);
+    return completed.length;
   }
 
-  bulkDelete(ids: string[]): void {
-    ids.forEach(id => this.remove(id));
+  replaceTasks(tasks: Task[]): void {
+    const normalized = tasks.map(task => this.normalizeTask(task));
+    this.tasks.set(normalized);
+    this.record('imported', `${normalized.length} tâche(s)`);
   }
 
-  clearCompleted(): void {
-    this.tasks.update(tasks => tasks.filter(t => !t.completed));
+  clearHistory(): void {
+    this.history.set([]);
   }
 
-  toggleTheme(): void {
-    this.settings.update(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }));
-  }
-
-
-  setDailyGoal(value: number): void {
-    this.settings.update(s => ({ ...s, dailyGoal: Math.max(1, Math.min(20, Math.round(value || 1))) }));
-  }
-
-
-  private createRecurringCopy(task: Task): void {
-    const date = new Date(`${task.dueDate}T12:00:00`);
-    const recurrence: Recurrence = task.recurrence;
-    if (recurrence === 'daily') date.setDate(date.getDate() + 1);
-    if (recurrence === 'weekly') date.setDate(date.getDate() + 7);
-    if (recurrence === 'monthly') date.setMonth(date.getMonth() + 1);
-    const dueDate = this.toDateInput(date);
-    this.create({
-      title: task.title,
-      description: task.description,
-      notes: task.notes,
-      status: 'todo',
-      completed: false,
-      archived: false,
-      pinned: task.pinned,
-      favorite: task.favorite,
-      priority: task.priority,
-      energy: task.energy,
-      category: task.category,
-      tags: [...task.tags],
-      dueDate,
-      dueTime: '',
-      recurrence: task.recurrence,
-      subtasks: task.subtasks.map(s => ({ ...s, id: crypto.randomUUID(), completed: false })),
-      estimatedMinutes: task.estimatedMinutes,
-      actualMinutes: 0
-    });
-  }
-
-  private log(type: ActivityEntry['type'], taskTitle: string, detail?: string): void {
-    const entry: ActivityEntry = { id: crypto.randomUUID(), type, taskTitle, timestamp: new Date().toISOString(), detail };
-    this.activity.update(items => [entry, ...items].slice(0, 80));
-  }
-
-  private normalizeTask(value: unknown): Task {
-    const raw = (value ?? {}) as Partial<Task>;
-    const now = new Date().toISOString();
-    const completed = Boolean(raw.completed);
-    return {
-      id: raw.id || crypto.randomUUID(),
-      title: String(raw.title || 'Sans titre'),
-      description: String(raw.description || ''),
-      notes: String(raw.notes || ''),
-      status: raw.status ?? (completed ? 'done' : 'todo'),
-      completed,
-      archived: Boolean(raw.archived),
-      pinned: Boolean(raw.pinned),
-      favorite: Boolean(raw.favorite),
-      priority: raw.priority ?? 'medium',
-      energy: raw.energy ?? 'medium',
-      category: String(raw.category || ''),
-      tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
-      dueDate: String(raw.dueDate || ''),
-      dueTime: '',
-      recurrence: raw.recurrence ?? 'none',
-      subtasks: Array.isArray(raw.subtasks) ? raw.subtasks.map(s => ({ id: s.id || crypto.randomUUID(), title: String(s.title || ''), completed: Boolean(s.completed) })) : [],
-      estimatedMinutes: Number(raw.estimatedMinutes) || 0,
-      actualMinutes: Number(raw.actualMinutes) || 0,
-      createdAt: raw.createdAt || now,
-      updatedAt: raw.updatedAt || now,
-      completedAt: raw.completedAt || (completed ? now : null)
+  private record(action: HistoryEntry['action'], taskTitle: string): void {
+    const entry: HistoryEntry = {
+      id: crypto.randomUUID(),
+      action,
+      taskTitle,
+      date: new Date().toISOString()
     };
+    this.history.update(items => [entry, ...items].slice(0, 100));
   }
 
   private readTasks(): Task[] {
     try {
-      const raw = localStorage.getItem(TASKS_KEY) ?? localStorage.getItem(LEGACY_TASKS_KEY) ?? '[]';
-      const parsed = JSON.parse(raw) as unknown[];
-      return Array.isArray(parsed) ? parsed.map(task => this.normalizeTask(task)) : [];
+      let raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        for (const key of OLD_KEYS) {
+          raw = localStorage.getItem(key);
+          if (raw) break;
+        }
+      }
+      const parsed = JSON.parse(raw ?? '[]') as unknown[];
+      return Array.isArray(parsed) ? parsed.map(value => this.normalizeTask(value)) : [];
     } catch {
       return [];
     }
   }
 
-  private readSettings(): AppSettings {
+  private readHistory(): HistoryEntry[] {
     try {
-      const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? localStorage.getItem(LEGACY_SETTINGS_KEY) ?? '{}') as Partial<AppSettings>;
-      return { theme: raw.theme === 'dark' ? 'dark' : 'light', compact: false, dailyGoal: Number(raw.dailyGoal) || 5 };
-    } catch {
-      return { theme: 'light', compact: false, dailyGoal: 5 };
-    }
-  }
-
-  private readActivity(): ActivityEntry[] {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(ACTIVITY_KEY) ?? '[]') as ActivityEntry[];
-      return Array.isArray(parsed) ? parsed : [];
+      const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') as HistoryEntry[];
+      return Array.isArray(parsed) ? parsed.slice(0, 100) : [];
     } catch {
       return [];
     }
   }
 
-  private toDateInput(date: Date): string {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  private normalizeTask(value: unknown): Task {
+    const raw = (value ?? {}) as Partial<Task> & { subtasks?: unknown[] };
+    const now = new Date().toISOString();
+    const subtasks = Array.isArray(raw.subtasks)
+      ? raw.subtasks.map(item => {
+          const subtask = (item ?? {}) as Partial<Subtask>;
+          return {
+            id: subtask.id || crypto.randomUUID(),
+            title: String(subtask.title || 'Sous-tâche'),
+            completed: Boolean(subtask.completed)
+          };
+        })
+      : [];
+
+    const allSubtasksDone = subtasks.length > 0 && subtasks.every(subtask => subtask.completed);
+    const rawStatus = raw.status;
+    const status: TaskStatus = allSubtasksDone
+      ? 'done'
+      : rawStatus === 'doing' || rawStatus === 'done' || rawStatus === 'todo'
+        ? rawStatus
+        : raw.completed ? 'done' : 'todo';
+
+    return {
+      id: raw.id || crypto.randomUUID(),
+      title: String(raw.title || 'Sans titre'),
+      completed: status === 'done',
+      status,
+      subtasks,
+      createdAt: raw.createdAt || now,
+      updatedAt: raw.updatedAt || now
+    };
   }
 }
