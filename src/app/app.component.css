@@ -76,3 +76,11 @@ nav button.active{background:var(--accent-soft);color:var(--accent);font-weight:
 @media(max-width:430px){
   .tablewrap td{grid-template-columns:88px minmax(0,1fr);gap:8px}.tablewrap tr{padding:13px}.table-actions{grid-template-columns:1fr!important}.table-actions .danger{grid-column:auto}.subtask-preview{padding:8px}
 }
+
+/* Drag & drop : souris + tactile */
+.card[draggable="true"]{cursor:grab;touch-action:pan-y}
+.card[draggable="true"]:active{cursor:grabbing}
+.card.touch-dragging{opacity:.58;transform:scale(.985);box-shadow:0 16px 34px rgba(80,15,25,.18);touch-action:none}
+.column{transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease}
+.column.touch-target{border-color:#b4313f!important;background:rgba(180,49,63,.055)!important;box-shadow:inset 0 0 0 2px rgba(180,49,63,.14)}
+@media (max-width:760px){.card[draggable="true"]{touch-action:pan-y}.card.touch-dragging{touch-action:none}.column.touch-target{transform:none}}
